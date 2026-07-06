@@ -1,0 +1,13 @@
+[project]
+name = "transport-vic-project"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12.13"
+dependencies = [
+    "azure-functions>=1.24.0",
+    "azure-storage-blob>=12.30.0",
+    "gtfs-realtime-bindings>=2.1.0",
+    "pandas>=3.0.3",
+    "requests>=2.34.2",
+]

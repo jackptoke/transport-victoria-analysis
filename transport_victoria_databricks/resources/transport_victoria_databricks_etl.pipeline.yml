@@ -1,0 +1,20 @@
+# The main pipeline for transport_victoria_databricks
+
+resources:
+  pipelines:
+    transport_victoria_databricks_etl:
+      name: transport_victoria_databricks_etl
+      catalog: ${var.catalog}
+      schema: ${var.schema}
+      serverless: true
+      root_path: "../src/transport_victoria_databricks_etl"
+
+      libraries:
+        - glob:
+            include: ../src/transport_victoria_databricks_etl/transformations/**
+
+      environment:
+        dependencies:
+          # We include every dependency defined by pyproject.toml by defining an editable environment
+          # that points to the folder where pyproject.toml is deployed.
+          - --editable ${workspace.file_path}
