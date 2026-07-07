@@ -68,3 +68,34 @@ with this project. It's also possible to interact with it directly using the CLI
    ```
    $ uv run pytest
    ```
+
+# Security
+
+## Roles required for Databricks to write and receive notification from the blob storage
+
+* Storage Blob Data Contributor
+* Storage Queue Data Contributor
+* EventGrid EventSubscription Contributor
+
+## Visual Code Setup
+
+* Install the Databricks extension if necessary
+* After creating the virtual Python environment, install databricks-connect (if cluster will be used)
+
+## Commands
+
+```databricks
+databricks bundle validate -t [dev/prod]
+databricks bundle deploy -t [dev/prod]
+databricks bundle run bronze_vline_trip_updates -t [dev/prod]
+
+
+```
+
+## Maintenance Command
+
+```sql
+-- Optimise the table
+OPTIMIZE transport_vic_dev.`01_bronze`.bronze_vline_trip_updates;
+
+```

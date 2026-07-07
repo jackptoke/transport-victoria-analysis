@@ -1,0 +1,35 @@
+# Daily job: ingest raw V/Line GTFS-realtime protobuf files into the bronze table.
+# The notebook uses Auto Loader with trigger(availableNow=True), so each run picks up
+# only the files that landed since the last run (checkpoint-tracked), then stops.
+
+resources:
+  jobs:
+    bronze_vline_trip_updates:
+      name: bronze_vline_trip_updates
+
+      # Only one run at a time — overlapping runs would collide on the same Auto Loader checkpoint.
+      max_concurrent_runs: 1
+
+      trigger:
+        # Run once per day, one day after the previous run finishes.
+        periodic:
+          interval: 1
+          unit: DAYS
+        # schedule:
+          # quartz_cron_expression: "0 0 2 * * ?"
+          # timezone_id: Australia/Melbourne
+
+      email_notifications:
+        on_failure:
+          - jack.toke@outlook.com
+
+      # Passed to the notebook as a `catalog` widget; resolves to transport_vic_dev / _prod per target.
+      parameters:
+        - name: catalog
+          default: ${var.catalog}
+
+      tasks:
+        # Pure notebook task with no cluster spec -> runs on serverless compute.
+        - task_key: raw_protobuf_to_bronze
+          notebook_task:
+            notebook_path: ../src/transport_victoria_databricks_etl/01_bronze/01_raw_protobuff_to_bronze.ipynb

@@ -28,18 +28,20 @@ targets:
     mode: development
     default: true
     workspace:
-      host: https://adb-7405614172025539.19.azuredatabricks.net
+      host: https://adb-7405607273791803.3.azuredatabricks.net
+      profile: transport_vic
     variables:
-      catalog: transport_victoria
+      catalog: transport_vic_dev
       schema: dev
   prod:
     mode: production
     workspace:
-      host: https://adb-7405614172025539.19.azuredatabricks.net
+      host: https://adb-7405607273791803.3.azuredatabricks.net
+      profile: transport_vic
       # We explicitly deploy to /Workspace/Users/jack.toke_outlook.com#ext#@jacktokeoutlook.onmicrosoft.com to make sure we only have a single copy.
       root_path: /Workspace/Users/jack.toke_outlook.com#ext#@jacktokeoutlook.onmicrosoft.com/.bundle/${bundle.name}/${bundle.target}
     variables:
-      catalog: transport_victoria
+      catalog: transport_vic_prod
       schema: prod
     permissions:
       - user_name: jack.toke_outlook.com#ext#@jacktokeoutlook.onmicrosoft.com
