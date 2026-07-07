@@ -14,7 +14,7 @@ resources:
         # catalog resolves to transport_vic_dev / _prod per target.
         table_update:
           table_names:
-            - ${var.catalog}.`01_bronze`.bronze_vline_trip_updates
+            - ${var.catalog}.`01_bronze`.vline_trip_updates
           # Debounce: wait for bronze to settle and don't re-fire more than once a minute.
           min_time_between_triggers_seconds: 60
 
