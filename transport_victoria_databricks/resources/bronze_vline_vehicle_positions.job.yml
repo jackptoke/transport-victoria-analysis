@@ -1,0 +1,33 @@
+# Job: ingest raw V/Line GTFS-realtime vehicle-position protobuf files into the bronze table.
+# Mirrors the trip-updates bronze job. Auto Loader trigger(availableNow=True) picks up only the
+# files landed since the last run (checkpoint-tracked), then stops.
+
+resources:
+  jobs:
+    bronze_vline_vehicle_positions:
+      name: bronze_vline_vehicle_positions
+
+      # Only one run at a time — overlapping runs would collide on the same Auto Loader checkpoint.
+      max_concurrent_runs: 1
+
+      trigger:
+        # Vehicle positions land every ~30s, so the feed goes stale fast — hourly keeps bronze
+        # reasonably fresh without a run per file. Drop to minutes if you want a near-live map.
+        periodic:
+          interval: 1
+          unit: HOURS
+
+      email_notifications:
+        on_failure:
+          - jack.toke@outlook.com
+
+      # Passed to the notebook as a `catalog` widget; resolves to transport_vic_dev / _prod per target.
+      parameters:
+        - name: catalog
+          default: ${var.catalog}
+
+      tasks:
+        # Pure notebook task with no cluster spec -> runs on serverless compute.
+        - task_key: raw_vehicle_positions_to_bronze
+          notebook_task:
+            notebook_path: ../src/transport_victoria_databricks_etl/01_bronze/01_raw_vehicle_positions_to_bronze.ipynb

@@ -1,0 +1,59 @@
+# Weekly job: download the GTFS static schedule export and land the raw zip in a bronze volume.
+# The notebook derives export_date from the feed's Last-Modified header and skips the download
+# if that export already landed, so running more often than the feed rolls is cheap.
+
+resources:
+  jobs:
+    weekly_schedule_download:
+      name: weekly_schedule_download
+
+      # One run at a time — concurrent runs would race on the same export_date path.
+      max_concurrent_runs: 1
+
+      trigger:
+        periodic:
+          interval: 7
+          unit: DAYS
+
+      email_notifications:
+        on_failure:
+          - jack.toke@outlook.com
+
+      # Passed to the notebook as a `catalog` widget; resolves to transport_vic_dev / _prod per target.
+      parameters:
+        - name: catalog
+          default: ${var.catalog}
+
+      tasks:
+        # Pure notebook task with no cluster spec -> runs on serverless compute.
+        - task_key: weekly_schedule_download
+          notebook_task:
+            notebook_path: ../src/transport_victoria_databricks_etl/00_extractions/00_weekly_schedule_download.ipynb
+
+        # Unpacks gtfs.zip -> per-mode google_transit.zip -> *.txt, into the same export_date
+        # partition. Reads export_date from the download task via taskValues.
+        - task_key: extract_schedule_zip
+          depends_on:
+            - task_key: weekly_schedule_download
+          notebook_task:
+            notebook_path: ../src/transport_victoria_databricks_etl/00_extractions/01_extract_schedule_zip.ipynb
+
+        # Fan out one parallel bronze ingest per GTFS static file. Every iteration runs the same
+        # parameterized notebook with a different `filename`; the notebook derives its table and
+        # checkpoint from that. Retries cover the one-shot restart when a feed widens the schema
+        # (schemaEvolutionMode=addNewColumns). `catalog` comes from the job parameter above.
+        - task_key: raw_schedule_to_bronze
+          depends_on:
+            - task_key: extract_schedule_zip
+          for_each_task:
+            concurrency: 11
+            inputs: >-
+              ["agency.txt","calendar.txt","calendar_dates.txt","levels.txt","pathways.txt","routes.txt","shapes.txt","stops.txt","stop_times.txt","transfers.txt","trips.txt"]
+            task:
+              task_key: bronze_file
+              max_retries: 2
+              min_retry_interval_millis: 60000
+              notebook_task:
+                notebook_path: ../src/transport_victoria_databricks_etl/01_bronze/01_raw_schedule_to_bronze.ipynb
+                base_parameters:
+                  filename: "{{input}}"

@@ -1,0 +1,34 @@
+# Silver job: build the GTFS stops SCD2 dimension from bronze.
+# Triggered whenever the bronze stops table gets new rows (i.e. after the weekly bronze fan-out runs).
+
+resources:
+  jobs:
+    silver_stops:
+      name: silver_stops
+
+      # One run at a time — overlapping runs would collide on the silver streaming checkpoint.
+      max_concurrent_runs: 1
+
+      trigger:
+        # Fire when bronze stops is updated. Backticks because the schema name starts with a digit;
+        # catalog resolves to transport_vic_dev / _prod per target.
+        table_update:
+          table_names:
+            - ${var.catalog}.`01_bronze`.stops
+          # Debounce: wait for bronze to settle and don't re-fire more than once a minute.
+          min_time_between_triggers_seconds: 60
+
+      email_notifications:
+        on_failure:
+          - jack.toke@outlook.com
+
+      # Passed to the notebook as a `catalog` widget; resolves to transport_vic_dev / _prod per target.
+      parameters:
+        - name: catalog
+          default: ${var.catalog}
+
+      tasks:
+        # Pure notebook task with no cluster spec -> runs on serverless compute.
+        - task_key: bronze_stops_to_silver
+          notebook_task:
+            notebook_path: ../src/transport_victoria_databricks_etl/02_silver/02_bronze_stops_to_silver.ipynb

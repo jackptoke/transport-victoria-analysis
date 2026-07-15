@@ -9,20 +9,9 @@ from azure.storage.blob import ContainerClient
 
 app = func.FunctionApp()
 
-
-@app.timer_trigger(
-    schedule="0 */5 * * * *",
-    arg_name="myTimer",
-    run_on_startup=False,
-    use_monitor=False,
-)
-def DTFSRealtimeTripUpdatesDownload(myTimer: func.TimerRequest) -> None:
-
-    if myTimer.past_due:
-        logging.info("The timer is past due!")
-
+def download_and_persist(url:str, file_path:str, file_prefix:str):
     logging.info("Start downloading Transport Victoria data ...")
-    url = "https://api.opendata.transport.vic.gov.au/opendata/public-transport/gtfs/realtime/v1/vline/trip-updates"
+
     headers = {"KeyId": os.environ["TRANSPORT_VIC_API_KEY"]}
 
     resp = requests.get(url, headers=headers, timeout=30)
@@ -42,10 +31,28 @@ def DTFSRealtimeTripUpdatesDownload(myTimer: func.TimerRequest) -> None:
     # 4. Write the blob with a timestamped name.
     # utcnow = datetime.datetime.now(datetime.timezone.utc)
     # blob_name = f"{utcnow:%Y/%m/%d}/trip-updates-{utcnow:%H%M%S}.pb"
-    blob_name = f"landing/vline_trip_updates/date={ts[:8]}/vline_tu_{ts}.pb"
+    blob_name = f"{file_path}/date={ts[:8]}/{file_prefix}_{ts}.pb"
     container.upload_blob(name=blob_name, data=resp.content, overwrite=True)
 
     logging.info("Wrote blob: %s", blob_name)
+
+
+@app.timer_trigger(
+    schedule="0 */5 * * * *",
+    arg_name="myTimer",
+    run_on_startup=False,
+    use_monitor=False,
+)
+def GTFSRealtimeTripUpdatesDownload(myTimer: func.TimerRequest) -> None:
+
+    if myTimer.past_due:
+        logging.info("The timer is past due!")
+
+    logging.info("Start downloading Transport Victoria data ...")
+    url = "https://api.opendata.transport.vic.gov.au/opendata/public-transport/gtfs/realtime/v1/vline/trip-updates"
+    file_path = "landing/vline_trip_updates"
+
+    download_and_persist(url=url, file_path=file_path, file_prefix="vline_tu")
     # for entity in feed.entity:
     #     if entity.HasField("trip_update"):
     #         tu = entity.trip_update
@@ -55,7 +62,19 @@ def DTFSRealtimeTripUpdatesDownload(myTimer: func.TimerRequest) -> None:
     #             print("  stop:", stu.stop_id, "arrival delay (s):", delay)
 
 
-# A second function — an HTTP-triggered one, for example
-@app.route(route="health")
-def HealthCheck(req: func.HttpRequest) -> func.HttpResponse:
-    return func.HttpResponse("OK", status_code=200)
+@app.timer_trigger(
+    schedule="0 */2 * * * *",
+    arg_name="myTimer",
+    run_on_startup=False,
+    use_monitor=False,
+)
+def GTFSRealtimeVehiclePositionsDownload(myTimer: func.TimerRequest) -> None:
+
+    if myTimer.past_due:
+        logging.info("The timer is past due!")
+
+    logging.info("Start downloading Transport Victoria data ...")
+    url = "https://api.opendata.transport.vic.gov.au/opendata/public-transport/gtfs/realtime/v1/vline/vehicle-positions"
+    file_path = "landing/vline_vehicle_positions"
+    download_and_persist(url=url, file_path=file_path, file_prefix="vline_vp")
+
