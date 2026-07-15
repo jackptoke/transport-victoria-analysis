@@ -45,3 +45,28 @@ az appservice plan delete   --name transport-vic-data-download-app-plan --resour
 az deployment group create --resource-group transport-victoria-rg --template-file main.bicep --parameters @main.parameters.json
 func azure functionapp publish transport-vic-data-download-app
 ```
+
+### Fixing role issues
+
+```terminal
+# your user's object id
+ME=$(az ad signed-in-user show --query id -o tuple 2>/dev/null || az ad signed-in-user show --query id -o tsv)
+
+az role assignment create \
+  --assignee "$ME" \
+  --role "Storage Blob Data Reader" \
+  --scope "$(az storage account show --name transportvictoriastorage --resource-group transport-victoria-rg --query id -o tsv)"
+```
+
+### Billing Alert
+
+```terminal
+az consumption budget create \
+  --budget-name transport-vic-monthly \
+  --amount 5 \
+  --time-grain Monthly \
+  --category Cost \
+  --resource-group transport-victoria-rg \
+  --start-date 2026-07-01 \
+  --end-date 2027-07-01
+```

@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 import azure.functions as func
 import requests
+from azure.identity import DefaultAzureCredential
 from azure.storage.blob import ContainerClient
 
 app = func.FunctionApp()
@@ -22,7 +23,7 @@ def DTFSRealtimeTripUpdatesDownload(myTimer: func.TimerRequest) -> None:
 
     logging.info("Start downloading Transport Victoria data ...")
     url = "https://api.opendata.transport.vic.gov.au/opendata/public-transport/gtfs/realtime/v1/vline/trip-updates"
-    headers = {"KeyId": os.environ["TRANSPORT_VICTORIA_API_KEY"]}
+    headers = {"KeyId": os.environ["TRANSPORT_VIC_API_KEY"]}
 
     resp = requests.get(url, headers=headers, timeout=30)
     resp.raise_for_status()
@@ -34,7 +35,9 @@ def DTFSRealtimeTripUpdatesDownload(myTimer: func.TimerRequest) -> None:
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
     conn = os.environ["GTFS_CONTAINER_SAS_URL"]
-    container = ContainerClient.from_container_url(conn_str=conn)
+    container = ContainerClient.from_container_url(
+        conn, credential=DefaultAzureCredential()
+    )
 
     # 4. Write the blob with a timestamped name.
     # utcnow = datetime.datetime.now(datetime.timezone.utc)

@@ -39,10 +39,50 @@ resource plan 'Microsoft.Web/serverfarms@2023-12-01' = {
   }
 }
 
+// Log Analytics workspace — the backend store for App Insights
+resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
+  name: '${functionAppName}-logs'
+  location: location
+  properties: {
+    sku: { name: 'PerGB2018' }
+    retentionInDays: 30
+  }
+}
+
+// Application Insights (workspace-based)
+resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
+  name: '${functionAppName}-insights'
+  location: location
+  kind: 'web'
+  properties: {
+    Application_Type: 'web'
+    WorkspaceResourceId: logAnalytics.id
+  }
+}
+
+resource dataLake 'Microsoft.Storage/storageAccounts@2023-01-01' existing = {
+  name: 'transportvicdatalake'
+}
+
+resource blobContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(dataLake.id, functionApp.id, 'blob-contributor')
+  scope: dataLake
+  properties: {
+    // Storage Blob Data Contributor's built-in role ID:
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
+    principalId: functionApp.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+
 resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
   name: functionAppName
   location: location
   kind: 'functionapp,linux'
+  identity: {
+    type: 'SystemAssigned'   // creates the app's managed identity
+  }
   properties: {
     serverFarmId: plan.id
     httpsOnly: true
@@ -75,6 +115,7 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
         { name: 'DEPLOYMENT_STORAGE_CONNECTION_STRING', value: storageConnectionString }
         { name: 'GTFS_CONTAINER_SAS_URL', value: gtfsContainerSasUrl }
         { name: 'TRANSPORT_VIC_API_KEY', value: transportVicApiKey }
+        { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsights.properties.ConnectionString }
       ]
     }
   }
