@@ -15,11 +15,18 @@ CATALOG = "transport_vic_dev"   # or transport_vic_prod
 out = f"/Volumes/{CATALOG}/03_gold/exports/fct_service_performance.parquet"
 spark.sql(f"CREATE VOLUME IF NOT EXISTS {CATALOG}.`03_gold`.exports")
 
-pdf = spark.table(f"{CATALOG}.`03_gold`.fct_service_performance").toPandas()
+# Enrich with human line names from the schedule dim (route_id -> route_long_name).
+routes = (spark.table(f"{CATALOG}.`02_silver`.routes")
+          .select("route_id", "route_short_name", "route_long_name")
+          .dropDuplicates(["route_id"]))
+pdf = (spark.table(f"{CATALOG}.`03_gold`.fct_service_performance")
+       .join(routes, "route_id", "left")
+       .toPandas())
 pdf.attrs.clear()   # serverless/Spark Connect attaches a non-serializable PlanMetrics to .attrs;
                     # to_parquet serializes .attrs into the file metadata and chokes on it.
 pdf.to_parquet(out, index=False)
-print("wrote", out, "|", len(pdf), "rows")
+print("wrote", out, "|", len(pdf), "rows |",
+      f"{pdf['route_long_name'].notna().mean():.0%} matched a line name")
 ```
 
 **Download it** to this folder (from the repo root):

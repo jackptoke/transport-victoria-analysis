@@ -31,9 +31,15 @@ def load_data(path: Path) -> pd.DataFrame:
     df = pd.read_parquet(path)
     df["service_date"] = pd.to_datetime(df["service_date"])
     df["event_time"] = pd.to_datetime(df["event_time"])
-    # Clean line label from the route_id (e.g. "aus:vic:vic-01-BDE:" -> "01-BDE").
-    df["line"] = (df["route_id"].fillna("unknown")
-                  .str.replace("aus:vic:vic-", "", regex=False).str.strip(":"))
+    # Prefer the human line name (route_long_name, if the export joined it); else a cleaned code
+    # from the route_id (e.g. "aus:vic:vic-01-BDE:" -> "01-BDE").
+    code = (df["route_id"].fillna("unknown")
+            .str.replace("aus:vic:vic-", "", regex=False).str.strip(":"))
+    if "route_long_name" in df.columns:
+        name = df["route_long_name"]
+        df["line"] = name.where(name.notna() & (name.str.strip() != ""), code)
+    else:
+        df["line"] = code
     df["hour"] = df["event_time"].dt.hour
     # Booleans that are never null on the fact.
     for c in ("is_terminus", "served", "cancelled"):
