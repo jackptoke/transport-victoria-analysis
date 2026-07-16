@@ -1,0 +1,13 @@
+# Clean, legible theme. Streamlit reads this automatically; no code changes needed.
+[theme]
+base = "light"
+primaryColor = "#0e7490"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f3f4f6"
+textColor = "#1f2937"
+font = "sans serif"
+
+[server]
+headless = true
+enableCORS = false
+enableXsrfProtection = true

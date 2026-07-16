@@ -1,0 +1,32 @@
+# Gold job: build the trip punctuality fact (fct_service_performance) from silver trip_updates.
+# Full recompute (collapse snapshots -> final delay + flags). Triggered when silver refreshes.
+
+resources:
+  jobs:
+    gold_service_performance:
+      name: gold_service_performance
+
+      # One run at a time — the notebook INSERT OVERWRITEs the fact, so overlapping runs would race.
+      max_concurrent_runs: 1
+
+      trigger:
+        # Rebuild after silver trip_updates lands new rows. Single table -> no condition needed.
+        table_update:
+          table_names:
+            - ${var.catalog}.`02_silver`.trip_updates
+          min_time_between_triggers_seconds: 300
+
+      email_notifications:
+        on_failure:
+          - jack.toke@outlook.com
+
+      # Passed to the notebook as a `catalog` widget; resolves to transport_vic_dev / _prod per target.
+      parameters:
+        - name: catalog
+          default: ${var.catalog}
+
+      tasks:
+        # Pure notebook task with no cluster spec -> runs on serverless compute.
+        - task_key: fct_service_performance
+          notebook_task:
+            notebook_path: ../src/transport_victoria_databricks_etl/03_gold/02_fct_service_performance.ipynb
