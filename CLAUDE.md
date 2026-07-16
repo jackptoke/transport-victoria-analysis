@@ -55,6 +55,8 @@ GTFS-Static schedule (weekly)
 | Bronze (VP) | `01_bronze/01_raw_vehicle_positions_to_bronze.ipynb` | `<cat>.01_bronze.vline_vehicle_positions` | `bronze_vline_vehicle_positions.job.yml` | hourly `periodic` |
 | Bronze (static) | `01_bronze/01_raw_schedule_to_bronze.ipynb` | `<cat>.01_bronze.<file>` (11: stops, routes, trips, …) | `weekly_schedule_download.job.yml` (`for_each`) | after `extract` task |
 | Silver (stops) | `02_silver/02_bronze_stops_to_silver.ipynb` | `<cat>.02_silver.stops` (SCD2) | `silver_stops.job.yml` | `table_update` on `01_bronze.stops` |
+| Silver (VP) | `02_silver/02_bronze_vehicle_positions_to_silver.ipynb` | `<cat>.02_silver.vehicle_positions` | `silver_vehicle_positions.job.yml` | `table_update` on `01_bronze.vline_vehicle_positions` |
+| Silver (dims) | `02_silver/02_schedule_dims_to_silver.ipynb` | `<cat>.02_silver.{routes,trips,calendar,calendar_dates,stop_times,transfers}` | `silver_schedule_dims.job.yml` | `table_update` on those bronze tables |
 
 - **Bronze (protobuf)** = raw/lossless: Auto Loader (`cloudFiles.format=binaryFile`) stores the raw
   `.pb` bytes in a `content` binary column (+ `path`, `modificationTime`, `length`, `_ingest_ts`).
@@ -129,8 +131,12 @@ Pending (next: **silver + gold tables**):
 - [ ] **`dim_mode`** reference seed + loader (`feed_id` → mode). Known: 1 Regional Train, 2 Metro Train,
       3 Metro Tram, 4 Myki Bus, 5 Regional Coach, 6 Regional Bus, 10 Interstate, 11 SkyBus (7–9 absent).
       Category filled only for feeds being analysed; feed 10 deferred (verify via `agency.txt`).
-- [ ] **Silver** for the other 10 static files (bronze-now, silver-as-needed); vehicle positions silver
-      (`from_protobuf` → lat/lon/bearing/trip), dedup on `header.timestamp`.
+- [x] **Vehicle positions silver** validated against real data — lat/lon/bearing/`vehicle.trip` all 100%
+      populated (per-line join works). V/Line does NOT send `license_plate`/`occupancy_status`/`congestion_level`
+      (dropped); `current_status` is always `IN_TRANSIT_TO` so far (kept, may vary over more snapshots).
+- [~] **Schedule dims silver** drafted (`02_schedule_dims_to_silver.ipynb` + `silver_schedule_dims.job.yml`):
+      routes, trips, calendar, calendar_dates, stop_times, transfers — typed current-snapshot, **pending
+      validation against real bronze schemas**. Remaining static files (agency, levels, pathways, shapes) as-needed.
 - [ ] **Gold** — trip updates "latest predicted arrival/delay per stop" (collapse `FULL_DATASET`);
       positional/map from vehicle positions. **Plan: [docs/GOLD_PLAN.md](docs/GOLD_PLAN.md)** (exec
       performance questions + `fct_service_performance` star schema).
