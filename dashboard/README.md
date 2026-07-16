@@ -14,10 +14,12 @@ app. No live Databricks connection, no credentials, no running SQL warehouse. Re
 CATALOG = "transport_vic_dev"   # or transport_vic_prod
 out = f"/Volumes/{CATALOG}/03_gold/exports/fct_service_performance.parquet"
 spark.sql(f"CREATE VOLUME IF NOT EXISTS {CATALOG}.`03_gold`.exports")
-(spark.table(f"{CATALOG}.`03_gold`.fct_service_performance")
-      .toPandas()
-      .to_parquet(out, index=False))
-print("wrote", out)
+
+pdf = spark.table(f"{CATALOG}.`03_gold`.fct_service_performance").toPandas()
+pdf.attrs.clear()   # serverless/Spark Connect attaches a non-serializable PlanMetrics to .attrs;
+                    # to_parquet serializes .attrs into the file metadata and chokes on it.
+pdf.to_parquet(out, index=False)
+print("wrote", out, "|", len(pdf), "rows")
 ```
 
 **Download it** to this folder (from the repo root):
