@@ -1,0 +1,42 @@
+# Silver job: build the typed GTFS schedule dimensions (routes, trips, calendar, calendar_dates,
+# stop_times, transfers) from bronze. Triggered after the weekly static bronze fan-out lands.
+
+resources:
+  jobs:
+    silver_schedule_dims:
+      name: silver_schedule_dims
+
+      # One run at a time — the notebook overwrites each dim, so overlapping runs would race.
+      max_concurrent_runs: 1
+
+      trigger:
+        # ANY table updating arms the trigger; wait_after_last_change collapses the parallel fan-out
+        # (all tables written around the same time) into ONE run, firing only once the burst settles
+        # so every dim rebuilds from the fresh export. condition is required when >1 table is watched;
+        # ANY_UPDATED (not ALL_UPDATED) so a skipped/absent file in an export can't stall the trigger.
+        table_update:
+          table_names:
+            - ${var.catalog}.`01_bronze`.routes
+            - ${var.catalog}.`01_bronze`.trips
+            - ${var.catalog}.`01_bronze`.calendar
+            - ${var.catalog}.`01_bronze`.calendar_dates
+            - ${var.catalog}.`01_bronze`.stop_times
+            - ${var.catalog}.`01_bronze`.transfers
+          condition: ANY_UPDATED
+          wait_after_last_change_seconds: 300
+          min_time_between_triggers_seconds: 60
+
+      email_notifications:
+        on_failure:
+          - jack.toke@outlook.com
+
+      # Passed to the notebook as a `catalog` widget; resolves to transport_vic_dev / _prod per target.
+      parameters:
+        - name: catalog
+          default: ${var.catalog}
+
+      tasks:
+        # Pure notebook task with no cluster spec -> runs on serverless compute.
+        - task_key: schedule_dims_to_silver
+          notebook_task:
+            notebook_path: ../src/transport_victoria_databricks_etl/02_silver/02_schedule_dims_to_silver.ipynb

@@ -1,0 +1,42 @@
+# Silver job: decode bronze vehicle-position protobuf bytes into typed vehicle-level rows.
+# Triggered whenever the bronze VP table gets new rows (i.e. after the VP bronze job runs).
+
+resources:
+  jobs:
+    silver_vehicle_positions:
+      name: silver_vehicle_positions
+
+      # One run at a time — overlapping runs would collide on the silver streaming checkpoint.
+      max_concurrent_runs: 1
+
+      trigger:
+        # Fire when bronze VP is updated. Backticks because the schema name starts with a digit;
+        # catalog resolves to transport_vic_dev / _prod per target.
+        table_update:
+          table_names:
+            - ${var.catalog}.`01_bronze`.vline_vehicle_positions
+          # Debounce: wait for bronze to settle and don't re-fire more than once a minute.
+          min_time_between_triggers_seconds: 60
+
+      email_notifications:
+        on_failure:
+          - jack.toke@outlook.com
+
+      # Passed to the notebook as a `catalog` widget; resolves to transport_vic_dev / _prod per target.
+      parameters:
+        - name: catalog
+          default: ${var.catalog}
+
+      tasks:
+        - task_key: bronze_vehicle_positions_to_silver
+          notebook_task:
+            notebook_path: ../src/transport_victoria_databricks_etl/02_silver/02_bronze_vehicle_positions_to_silver.ipynb
+          # Serverless environment — carries gtfs-realtime-bindings for the one-time descriptor build.
+          environment_key: default
+
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "4"
+            dependencies:
+              - gtfs-realtime-bindings==2.1.0
