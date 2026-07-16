@@ -57,6 +57,7 @@ GTFS-Static schedule (weekly)
 | Silver (stops) | `02_silver/02_bronze_stops_to_silver.ipynb` | `<cat>.02_silver.stops` (SCD2) | `silver_stops.job.yml` | `table_update` on `01_bronze.stops` |
 | Silver (VP) | `02_silver/02_bronze_vehicle_positions_to_silver.ipynb` | `<cat>.02_silver.vehicle_positions` | `silver_vehicle_positions.job.yml` | `table_update` on `01_bronze.vline_vehicle_positions` |
 | Silver (dims) | `02_silver/02_schedule_dims_to_silver.ipynb` | `<cat>.02_silver.{routes,trips,calendar,calendar_dates,stop_times,transfers}` | `silver_schedule_dims.job.yml` | `table_update` on those bronze tables |
+| Gold (perf) | `03_gold/02_fct_service_performance.ipynb` | `<cat>.03_gold.fct_service_performance` | `gold_service_performance.job.yml` | `table_update` on `02_silver.trip_updates` |
 
 - **Bronze (protobuf)** = raw/lossless: Auto Loader (`cloudFiles.format=binaryFile`) stores the raw
   `.pb` bytes in a `content` binary column (+ `path`, `modificationTime`, `length`, `_ingest_ts`).
@@ -137,9 +138,12 @@ Pending (next: **silver + gold tables**):
 - [~] **Schedule dims silver** drafted (`02_schedule_dims_to_silver.ipynb` + `silver_schedule_dims.job.yml`):
       routes, trips, calendar, calendar_dates, stop_times, transfers — typed current-snapshot, **pending
       validation against real bronze schemas**. Remaining static files (agency, levels, pathways, shapes) as-needed.
-- [ ] **Gold** — trip updates "latest predicted arrival/delay per stop" (collapse `FULL_DATASET`);
-      positional/map from vehicle positions. **Plan: [docs/GOLD_PLAN.md](docs/GOLD_PLAN.md)** (exec
-      performance questions + `fct_service_performance` star schema).
+- [x] **Gold** — `fct_service_performance` (collapse `FULL_DATASET` → final delay per served stop +
+      on-time/severe/terminus flags). **Plan: [docs/GOLD_PLAN.md](docs/GOLD_PLAN.md)**.
+- [x] **Dashboard** — Streamlit reading a Parquet snapshot of the gold fact, live on Railway
+      (`asia-southeast1`), auto-deployed from GitHub. Code + refresh flow: [dashboard/](dashboard/README.md).
+- [ ] Next: Q2 cancellation anti-join (`calendar`/`trips` scheduled-but-absent), `dim_date` peak/weekday,
+      vehicle-position map, dashboard cosmetic polish + line-name join in the export.
 
 ## Commands
 

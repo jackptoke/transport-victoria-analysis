@@ -3,6 +3,11 @@
 > Working plan for the gold layer. Executive lens: **is V/Line reliable and trustworthy?**
 > Scope v1 = V/Line only (extend per line/mode later). Pairs with [DESIGN_DECISIONS.md](DESIGN_DECISIONS.md)
 > and the pipeline reference in [../CLAUDE.md](../CLAUDE.md).
+>
+> **Status:** the `fct_service_performance` fact is **built** (`03_gold/02_fct_service_performance.ipynb`)
+> and drives the **live [Streamlit dashboard](https://dashboard-production-a1ad.up.railway.app)** — it
+> answers Q1/Q3/Q4/Q5/Q6 directly. Still open: **Q2** (scheduled-but-absent cancellation anti-join) and a
+> `dim_date` for the peak/weekday cut.
 
 ## Framing
 

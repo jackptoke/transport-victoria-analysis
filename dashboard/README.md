@@ -3,6 +3,8 @@
 Tells the punctuality story from the gold fact `fct_service_performance`: headline KPIs → least-reliable
 lines → delay distribution → peak effect → written insights. Pure Streamlit + Plotly, deploys to Railway.
 
+**🔗 Live:** [dashboard-production-a1ad.up.railway.app](https://dashboard-production-a1ad.up.railway.app)
+
 ## Data (static snapshot)
 
 The app reads `data/fct_service_performance.parquet` — a snapshot of the gold table, committed with the
@@ -47,9 +49,13 @@ streamlit run app.py
 
 ## Deploy to Railway
 
-`railway.json` sets the Streamlit start command (binds `$PORT`, headless). Point Railway at this
-`dashboard/` directory (root directory = `dashboard`) and it builds with Nixpacks from `requirements.txt`.
-No environment variables needed — the data ships in the image.
+Deployed via Railway's **native GitHub integration** — the service watches this repo and **auto-deploys on
+every push** touching `dashboard/`. No CI token, no GitHub Action, no secret. Config:
+
+- **Root directory** `dashboard` → Railway builds this subfolder with Nixpacks from `requirements.txt`.
+- **Region** `asia-southeast1` (Singapore) — nearest to Melbourne.
+- `railway.json` sets the Streamlit start command (binds `$PORT`, headless).
+- **No environment variables** — the Parquet ships in the image (no live warehouse / credentials).
 
 ## Tuning
 

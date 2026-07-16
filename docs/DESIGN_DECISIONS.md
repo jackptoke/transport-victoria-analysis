@@ -68,11 +68,72 @@ bronze table (debounced `min_time_between_triggers_seconds: 60`).
 **Consequences:** In dev the trigger is auto-paused (development mode) → run silver manually while
 iterating. Streaming jobs use `max_concurrent_runs: 1` to avoid checkpoint collisions.
 
-## 9. (Planned) Vehicle positions polling cadence
-**Decision (proposed):** Poll the vehicle-positions endpoint every ~30s during service hours, with
-skip-write dedup keyed on `header.timestamp`.
-**Why:** Positions move (unlike slowly-evolving trip-update delays), so 5-min is too coarse; but never
-poll faster than the producer refreshes (verify via `header.timestamp` deltas). Skip-write decouples
-poll rate from write rate and avoids duplicate identical snapshots.
-**Consequences:** Sub-minute Azure Functions timer (`"*/30 * * * * *"`). Confirm DataVic rate limits.
-Not yet implemented.
+## 9. Vehicle positions: 2-min polling, land-everything
+**Decision:** Poll vehicle-positions every 2 min (trip updates stay 5 min); land **every** snapshot to
+bronze and defer dedup (on `header.timestamp`) downstream, rather than skip-writing at the source.
+**Why:** Positions move, so 5 min is too coarse for a usable trail — but the feed caches ~30s, so polling
+faster just re-downloads identical data. A stateless function that always lands is simpler and more
+robust than one that must remember the last timestamp. Storage is trivial (<$0.10/mo even at 30s).
+**Consequences:** Silver keeps the full position time-series (a "latest per vehicle" collapse is a gold
+concern). Validated against real data: V/Line populates lat/lon/bearing/`vehicle.trip` (100%) but not
+`license_plate`/`occupancy_status`/`congestion_level` — those were dropped from silver.
+
+## 10. `stops` is the only SCD2 (Type-2) dimension
+**Decision:** Silver-stops tracks history via SCD2 (`foreachBatch` MERGE): key `(feed_id, stop_id)`, a
+null-safe `xxhash64` change-hash over the source attributes, `export_date`-based validity, no delete.
+**Why:** Stop attributes (name, platform, coordinates) change rarely but their history has value. The
+hash **excludes pipeline columns** (`_ingest_ts`/`_source_file`) or every weekly load would open a
+spurious version. No-delete because the extract can skip files — a partial export must not retire a live
+stop.
+**Consequences:** The other schedule dims are deliberately *not* SCD2 (see #11) — one dimension carries
+the Type-2 complexity, the rest stay simple.
+
+## 11. Schedule dims are current-snapshot, not SCD2
+**Decision:** `routes`/`trips`/`calendar`/`calendar_dates`/`stop_times`/`transfers` silver = latest
+`export_date` only (typed, deduped, overwrite), built by one parameterised notebook.
+**Why:** They're joined for names and calendars; SCD2 machinery isn't worth it for reference data. Bronze
+retains every export, so a point-in-time join can be added later if it's ever needed.
+**Consequences:** A schedule change mid-capture means an older trip-update row joins the newer schedule —
+acceptable while V/Line's timetable is stable (it rarely changes). Judgment call: don't over-engineer.
+
+## 12. One parameterised bronze notebook, `for_each` fan-out
+**Decision:** All 11 GTFS static files load through a single notebook driven by a `filename` widget,
+fanned out by a `for_each` task. The notebook never names source columns (reads by header).
+**Why:** DRY — adding a file is one list entry, not a new notebook. Schema-agnostic ingestion:
+`schemaEvolutionMode=addNewColumns` + `mergeSchema` + task **retries** absorb a feed introducing a new
+column (the stream fails once and self-heals on restart).
+**Consequences:** A multi-table `table_update` trigger needs a `condition` — `ANY_UPDATED` +
+`wait_after_last_change_seconds`, so the parallel fan-out settles into one silver run and a skipped file
+can't stall the trigger.
+
+## 13. Azure Functions runtime kept off the ADLS Gen2 data lake
+**Decision:** The Functions host storage (`AzureWebJobsStorage`) is a separate non-HNS account
+(`transportvictoriastorage`); the data lake (`transportvicdatalake`, HNS) is reached only via managed
+identity + a scoped RBAC role.
+**Why:** `AzureWebJobsStorage` needs blob+queue+table and isn't a supported use of an HNS account; and
+hosting it on the data lake drops that account's **key** into app settings, undermining the managed
+identity. (Diagnosed from a real symptom — the runtime had homesteaded `azure-webjobs-*` containers into
+the data lake.)
+**Consequences:** Bicep `siteConfig.appSettings` is declarative, so a redeploy overwrites portal edits —
+`infra/main.parameters.json` is the source of truth.
+
+## 14. Gold collapses the prediction time-series; classify *after*, never before
+**Decision:** `fct_service_performance` = one row per served stop, taking the **latest snapshot per
+`(trip, stop)`** (window function). On-time (`≤ 359s`, V/Line's 5:59) / severe (`> 900s`) are derived
+**after** the collapse, never as a `WHERE delay > 0` pre-filter.
+**Why:** The last snapshot is the firmed-up, ~actual delay. Pre-filtering on delay deletes the on-time
+rows, so punctuality would compute to 0% — a subtle, real bug caught while validating a live trip against
+the data. `SKIPPED`/cancelled stops are flagged out; the destination (max served `stop_sequence`) is the
+headline metric.
+**Consequences:** Every KPI is a `GROUP BY` over one fact — no table-per-question sprawl. Caveat: the
+"final" value is the true actual only if the feed published the trip through completion.
+
+## 15. Dashboard: static Parquet snapshot + Railway native GitHub deploy
+**Decision:** A Streamlit app reads a Parquet export of the gold fact shipped inside the image; deployed
+to Railway via native GitHub integration (auto-deploy on push), not a CI token or a live warehouse query.
+**Why:** No credentials and no running SQL warehouse on a public app; free to host; can't break when a
+warehouse idles or a token expires. The Railway GitHub App connection makes a `RAILWAY_TOKEN` + a GitHub
+Action redundant. A live path (read-only Databricks **service principal** + serverless SQL warehouse) is
+a one-function swap if ever wanted.
+**Consequences:** Refresh = re-export the Parquet + push (a redeploy). Insights render from the loaded
+data so they stay correct as the snapshot grows; region `asia-southeast1` (nearest to Melbourne).
